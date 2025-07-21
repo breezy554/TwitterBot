@@ -1,59 +1,39 @@
 require('dotenv').config();
-const cron = require('node-cron');
-const { generateTweet } = require('./tweetGenerator');
 const { postToTwitter } = require('./poster');
 const { runReplyBot } = require('./replier');
 const { runRetweetBot } = require('./retweeter');
-const chromeLauncher = require('chrome-launcher');
+const generateTweet = require('./tweetGenerator');
 
-async function getLocalChromePath() {
-  const chrome = await chromeLauncher.launch({ chromeFlags: ['--headless'] });
-  const path = chrome.chromePath;
-  await chrome.kill();
-  return path;
-}
-
-(async () => {
+async function runBotCycle() {
   console.log('🚀 Bot started. Initializing first cycle...');
 
-  const executablePath = await getLocalChromePath();
-
-  // Run immediately
   try {
+    // Generate tweet
     const tweet = await generateTweet();
     console.log('🔥 Generated Tweet:', tweet);
-    await postToTwitter(tweet, executablePath);
-  } catch (e) {
-    console.error('❌ Tweet bot error:', e.message);
+
+    // Post tweet
+    await postToTwitter(tweet);
+  } catch (err) {
+    console.error('❌ Tweet bot error:', err.message);
   }
 
   try {
-    await runReplyBot(executablePath);
-  } catch (e) {
-    console.error('❌ Reply bot error:', e.message);
+    // Run reply bot
+    await runReplyBot();
+  } catch (err) {
+    console.error('❌ Reply bot error:', err.message);
   }
 
   try {
-    await runRetweetBot(executablePath);
-  } catch (e) {
-    console.error('❌ Retweet bot error:', e.message);
+    // Run retweet bot
+    await runRetweetBot();
+  } catch (err) {
+    console.error('❌ Retweet bot error:', err.message);
   }
 
-  // Run every 30 minutes
-  cron.schedule('*/30 * * * *', async () => {
-    console.log('🕒 Running scheduled tweet...');
-    const tweet = await generateTweet();
-    console.log('🔥 Generated Tweet:', tweet);
-    await postToTwitter(tweet, executablePath);
-  });
+  console.log('⏳ Cycle complete. Waiting 30 mins...\n');
+  setTimeout(runBotCycle, 1000 * 60 * 30); // 30 min cycle
+}
 
-  cron.schedule('*/15 * * * *', async () => {
-    console.log('💬 Running reply bot...');
-    await runReplyBot(executablePath);
-  });
-
-  cron.schedule('0 * * * *', async () => {
-    console.log('🔁 Running retweet bot...');
-    await runRetweetBot(executablePath);
-  });
-})();
+runBotCycle();
