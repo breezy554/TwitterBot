@@ -1,6 +1,6 @@
 require('dotenv').config();
 const cron = require('node-cron');
-const { generateTweet } = require('./ai');
+const { generateTweet } = require('./tweetGenerator');
 const { postToTwitter } = require('./poster');
 const { runReplyBot } = require('./replier');
 const { runRetweetBot } = require('./retweeter');
