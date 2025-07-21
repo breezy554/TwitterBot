@@ -1,7 +1,6 @@
 require('dotenv').config();
 const puppeteer = require('puppeteer-core');
 const chromeLauncher = require('chrome-launcher');
-const fs = require('fs');
 
 async function getLocalChromePath() {
   const chrome = await chromeLauncher.launch({ chromeFlags: ['--headless'] });
@@ -22,17 +21,13 @@ async function runRetweetBot() {
   const page = await browser.newPage();
 
   try {
-    await page.goto('https://twitter.com/home', {
-      waitUntil: 'networkidle2',
-      timeout: 60000
-    });
+    await page.goto('https://twitter.com/home', { waitUntil: 'networkidle2', timeout: 60000 });
 
     const loggedIn = await page.evaluate(() =>
       !!document.querySelector('[aria-label="Tweet text"], [data-testid="tweetTextarea_0"]')
     );
 
     if (!loggedIn) {
-      console.log('🔐 Logging in...');
       await page.goto('https://twitter.com/login', { waitUntil: 'networkidle2' });
 
       await page.waitForSelector('input[name="text"]', { timeout: 10000 });
@@ -45,9 +40,7 @@ async function runRetweetBot() {
         await page.type('input[name="text"]', process.env.TWITTER_USERNAME);
         await page.keyboard.press('Enter');
         await page.waitForTimeout(2000);
-      } catch {
-        console.log('➡️ Username not prompted.');
-      }
+      } catch (_) {}
 
       await page.waitForSelector('input[name="password"]', { timeout: 10000 });
       await page.type('input[name="password"]', process.env.TWITTER_PASSWORD);
@@ -56,42 +49,35 @@ async function runRetweetBot() {
     }
 
     await page.goto('https://twitter.com/explore', { waitUntil: 'networkidle2' });
-    await page.waitForSelector('article', { timeout: 10000 });
+    await page.waitForSelector('article');
 
-    const tweetLink = await page.evaluate(() => {
+    const tweet = await page.evaluate(() => {
       const article = document.querySelector('article');
-      return article?.querySelector('a[href*="/status/"]')?.href || '';
+      const link = article?.querySelector('a[href*="/status/"]')?.href;
+      return link;
     });
 
-    if (!tweetLink) {
-      console.log('⚠️ No tweet found to retweet.');
-      await page.screenshot({ path: 'retweet_none.png' });
-      return;
-    }
+    if (!tweet) return console.log('⚠️ No tweet to retweet.');
 
-    await page.goto(tweetLink, { waitUntil: 'networkidle2' });
+    await page.goto(tweet, { waitUntil: 'networkidle2' });
 
-    const retweetButton = await page.$('div[data-testid="retweet"]');
-    if (retweetButton) {
-      await retweetButton.click();
-      await page.waitForTimeout(500);
-
+    const retweet = await page.$('div[data-testid="retweet"]');
+    if (retweet) {
+      await retweet.click();
+      await page.waitForTimeout(1000);
       const confirm = await page.$('div[data-testid="retweetConfirm"]');
       if (confirm) {
         await confirm.click();
-        console.log('🔁 Retweeted:', tweetLink);
+        console.log('🔁 Retweeted:', tweet);
       } else {
-        console.error('❌ Retweet confirm button missing.');
-        await page.screenshot({ path: 'retweet_confirm_missing.png' });
+        console.error('❌ Confirm button not found.');
       }
     } else {
       console.error('❌ Retweet button not found.');
-      await page.screenshot({ path: 'retweet_button_missing.png' });
     }
 
   } catch (err) {
     console.error('❌ Retweet bot failed:', err.message);
-    await page.screenshot({ path: 'retweet_error.png' });
   } finally {
     await browser.close();
   }

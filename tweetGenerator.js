@@ -1,18 +1,21 @@
-const axios = require('axios');
+function generateTweet() {
+  const intros = [
+    "BREAKING NEWS:", "Yo...", "Hot take:", "My brain after watching LETSMANGA:", "New drop 🔥", "Gen Z be like:"
+  ];
+  const jokes = [
+    "Why did LETSMANGA crash Twitter? Too much sauce in one thread.",
+    "If vibes were a currency, LETSMANGA would be the Federal Reserve.",
+    "LETSMANGA taught me more than 4 years of college ever did.",
+    "My therapist now uses LETSMANGA memes to diagnose me.",
+    "The Mona Lisa saw LETSMANGA and blinked."
+  ];
+  const hashtags = ["#LETSMANGA", "#MemeStorm", "#NewAgeTwitter", "#GenZHumor", "#BotWithSauce"];
 
-async function generateTweet(topic) {
-  const prompt = `
-You are a meme-savvy Gen Z Twitter user who makes viral jokes like Elon Musk, drill, or the absurdist side of X. Write a funny, tweetable joke (max 280 characters) involving this trending topic: "${topic}".
+  const intro = intros[Math.floor(Math.random() * intros.length)];
+  const joke = jokes[Math.floor(Math.random() * jokes.length)];
+  const tags = hashtags.sort(() => 0.5 - Math.random()).slice(0, 2).join(' ');
 
-Avoid Brazilian references unless they are globally viral. Make sure it's relatable or chaotic in a good way.`;
-
-  const res = await axios.post('http://localhost:11434/api/generate', {
-    model: 'gemma:2b',
-    prompt,
-    stream: false
-  });
-
-  return res.data.response.trim();
+  return `${intro} ${joke} ${tags}`;
 }
 
 module.exports = { generateTweet };

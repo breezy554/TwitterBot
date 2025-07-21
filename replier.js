@@ -1,7 +1,6 @@
 require('dotenv').config();
 const puppeteer = require('puppeteer-core');
 const chromeLauncher = require('chrome-launcher');
-const fs = require('fs');
 
 async function getLocalChromePath() {
   const chrome = await chromeLauncher.launch({ chromeFlags: ['--headless'] });
@@ -22,17 +21,13 @@ async function runReplyBot() {
   const page = await browser.newPage();
 
   try {
-    await page.goto('https://twitter.com/home', {
-      waitUntil: 'networkidle2',
-      timeout: 60000
-    });
+    await page.goto('https://twitter.com/home', { waitUntil: 'networkidle2', timeout: 60000 });
 
     const loggedIn = await page.evaluate(() =>
       !!document.querySelector('[aria-label="Tweet text"], [data-testid="tweetTextarea_0"]')
     );
 
     if (!loggedIn) {
-      console.log('🔐 Logging in...');
       await page.goto('https://twitter.com/login', { waitUntil: 'networkidle2' });
 
       await page.waitForSelector('input[name="text"]', { timeout: 10000 });
@@ -45,9 +40,7 @@ async function runReplyBot() {
         await page.type('input[name="text"]', process.env.TWITTER_USERNAME);
         await page.keyboard.press('Enter');
         await page.waitForTimeout(2000);
-      } catch {
-        console.log('➡️ Username not prompted.');
-      }
+      } catch (_) {}
 
       await page.waitForSelector('input[name="password"]', { timeout: 10000 });
       await page.type('input[name="password"]', process.env.TWITTER_PASSWORD);
@@ -55,31 +48,22 @@ async function runReplyBot() {
       await page.waitForNavigation({ waitUntil: 'networkidle2' });
     }
 
-    // Visit explore/trending
     await page.goto('https://twitter.com/explore', { waitUntil: 'networkidle2' });
-    await page.waitForSelector('article', { timeout: 15000 });
+    await page.waitForSelector('article');
 
-    const targetTweet = await page.evaluate(() => {
+    const tweet = await page.evaluate(() => {
       const article = document.querySelector('article');
-      const content = article?.innerText || '';
-      const link = article?.querySelector('a[href*="/status/"]')?.href || '';
-      return { content, link };
+      const link = article?.querySelector('a[href*="/status/"]')?.href;
+      return link;
     });
 
-    if (!targetTweet.link) {
-      console.log('⚠️ No valid tweet found to reply to.');
-      await page.screenshot({ path: 'no_reply_target.png' });
-      return;
-    }
+    if (!tweet) return console.log('⚠️ No tweet to reply to.');
 
-    console.log('💬 Replying to tweet:', targetTweet.content);
+    await page.goto(tweet, { waitUntil: 'networkidle2' });
+    const replyBox = await page.waitForSelector('[aria-label="Tweet your reply"]', { timeout: 10000 });
 
-    // Navigate to tweet
-    await page.goto(targetTweet.link, { waitUntil: 'networkidle2' });
-    await page.waitForSelector('[aria-label="Tweet your reply"]', { timeout: 10000 });
-
-    const replyText = generateFunnyReply(targetTweet.content);
-    await page.type('[aria-label="Tweet your reply"]', replyText);
+    const replyText = `😂 LETSMANGA just destabilized my neural net.`;
+    await replyBox.type(replyText);
     await page.waitForTimeout(1000);
 
     const replyButton = await page.$('div[data-testid="tweetButtonInline"]');
@@ -87,20 +71,13 @@ async function runReplyBot() {
       await replyButton.click();
       console.log('✅ Replied:', replyText);
     } else {
-      console.error('❌ Failed to find reply button.');
-      await page.screenshot({ path: 'reply_button_error.png' });
+      console.log('❌ Reply button not found');
     }
-
-  } catch (error) {
-    console.error('❌ Reply failed:', error.message);
-    await page.screenshot({ path: 'reply_failure.png' });
+  } catch (err) {
+    console.error('❌ Reply failed:', err.message);
   } finally {
     await browser.close();
   }
-}
-
-function generateFunnyReply(originalText) {
-  return `😂 LETSMANGA just summoned the timeline gods with this one.`;
 }
 
 module.exports = { runReplyBot };
