@@ -10,80 +10,67 @@ async function runRetweetBot() {
   });
 
   const page = await browser.newPage();
-
   try {
-    await page.goto('https://twitter.com/home', {
-      waitUntil: 'networkidle2',
-      timeout: 60000
-    });
+    await page.goto('https://twitter.com/home', { waitUntil: 'networkidle2' });
 
-    const loggedIn = await page.evaluate(() =>
-      !!document.querySelector('[aria-label="Tweet text"], [data-testid="tweetTextarea_0"]')
-    );
-
-    if (!loggedIn) {
-      console.log('🔐 Logging in...');
-      await page.goto('https://twitter.com/login', { waitUntil: 'networkidle2' });
-
-      await page.waitForSelector('input[name="text"]', { timeout: 10000 });
-      await page.type('input[name="text"]', process.env.TWITTER_EMAIL);
-      await page.keyboard.press('Enter');
-      await new Promise(r => setTimeout(r, 2000));
-
-      try {
-        await page.waitForSelector('input[name="text"]', { timeout: 5000 });
-        await page.type('input[name="text"]', process.env.TWITTER_USERNAME);
-        await page.keyboard.press('Enter');
-        await new Promise(r => setTimeout(r, 2000));
-      } catch (e) {
-        console.log('➡️ Username step skipped.');
-      }
-
-      await page.waitForSelector('input[name="password"]', { timeout: 10000 });
-      await page.type('input[name="password"]', process.env.TWITTER_PASSWORD);
-      await page.keyboard.press('Enter');
-      await page.waitForNavigation({ waitUntil: 'networkidle2' });
-    }
+    if (!(await isLoggedIn(page))) await login(page);
 
     await page.goto('https://twitter.com/explore', { waitUntil: 'networkidle2' });
     await page.waitForSelector('article');
 
-    const tweetLink = await page.evaluate(() => {
-      const article = document.querySelector('article');
-      return article?.querySelector('a[href*="/status/"]')?.href || '';
+    const link = await page.evaluate(() => {
+      return document.querySelector('article a[href*="/status/"]')?.href || '';
     });
 
-    if (!tweetLink) {
-      console.log('⚠️ No tweet found to retweet.');
-      await page.screenshot({ path: 'retweet_none.png' });
-      return;
-    }
+    if (!link) throw new Error('No tweet to retweet');
 
-    await page.goto(tweetLink, { waitUntil: 'networkidle2' });
+    await page.goto(link, { waitUntil: 'networkidle2' });
 
-    const retweetButton = await page.$('div[data-testid="retweet"]');
-    if (retweetButton) {
-      await retweetButton.click();
-      await new Promise(r => setTimeout(r, 500));
-      const confirm = await page.$('div[data-testid="retweetConfirm"]');
-      if (confirm) {
-        await confirm.click();
-        console.log('🔁 Retweeted:', tweetLink);
+    const retweetBtn = await page.$('div[data-testid="retweet"]');
+    if (retweetBtn) {
+      await retweetBtn.click();
+      await new Promise(r => setTimeout(r, 1000));
+
+      const confirmBtn = await page.$('div[data-testid="retweetConfirm"]');
+      if (confirmBtn) {
+        await confirmBtn.click();
+        console.log('🔁 Retweeted:', link);
       } else {
-        console.error('❌ Retweet confirm button missing.');
         await page.screenshot({ path: 'retweet_confirm_missing.png' });
+        throw new Error('Retweet confirm missing');
       }
     } else {
-      console.error('❌ Retweet button not found.');
       await page.screenshot({ path: 'retweet_button_missing.png' });
+      throw new Error('Retweet button not found');
     }
-
-  } catch (err) {
-    console.error('❌ Retweet bot failed:', err.message);
+  } catch (e) {
     await page.screenshot({ path: 'retweet_error.png' });
+    console.error('❌ Retweet bot failed:', e.message);
   } finally {
     await browser.close();
   }
+}
+
+async function isLoggedIn(page) {
+  return await page.evaluate(() => !!document.querySelector('[aria-label="Tweet text"], [data-testid="tweetTextarea_0"]'));
+}
+
+async function login(page) {
+  console.log('🔐 Logging in...');
+  await page.goto('https://twitter.com/login');
+  await page.type('input[name="text"]', process.env.TWITTER_EMAIL);
+  await page.keyboard.press('Enter');
+  await page.waitForTimeout(2000);
+
+  try {
+    await page.type('input[name="text"]', process.env.TWITTER_USERNAME);
+    await page.keyboard.press('Enter');
+    await page.waitForTimeout(2000);
+  } catch {}
+
+  await page.type('input[name="password"]', process.env.TWITTER_PASSWORD);
+  await page.keyboard.press('Enter');
+  await page.waitForNavigation({ waitUntil: 'networkidle2' });
 }
 
 module.exports = { runRetweetBot };
